@@ -1,6 +1,13 @@
-import socket
+import dns.resolver
 import argparse
 from urllib.parse import urlparse
+
+# Cloudflare IP ranges (partial, for demonstration purposes)
+CLOUDFLARE_IP_RANGES = [
+    "104.16.0.0/12",
+    "172.64.0.0/13",
+    "131.0.72.0/22",
+]
 
 def extract_domain(url):
     """
@@ -8,6 +15,23 @@ def extract_domain(url):
     """
     parsed_url = urlparse(url)
     return parsed_url.netloc if parsed_url.netloc else url
+
+def is_cloudflare_ip(ip):
+    """
+    Checks if an IP belongs to Cloudflare's public range.
+    """
+    from ipaddress import ip_address, ip_network
+    return any(ip_address(ip) in ip_network(range) for range in CLOUDFLARE_IP_RANGES)
+
+def resolve_domain(domain):
+    """
+    Resolves the IP address of a domain using dnspython.
+    """
+    try:
+        answers = dns.resolver.resolve(domain, 'A')
+        return [answer.to_text() for answer in answers]
+    except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.exception.Timeout):
+        return []
 
 def find_ips(input_file, ips_only=False):
     """
@@ -18,13 +42,14 @@ def find_ips(input_file, ips_only=False):
             urls = infile.read().splitlines()
             for url in urls:
                 domain = extract_domain(url)
-                try:
-                    ip = socket.gethostbyname(domain)
-                    if ips_only:
-                        print(ip)
-                    else:
-                        print(f"{domain}: {ip}")
-                except socket.gaierror:
+                ips = resolve_domain(domain)
+                if ips:
+                    for ip in ips:
+                        if is_cloudflare_ip(ip):
+                            print(f"{domain}: {ip} (Cloudflare)" if not ips_only else f"{ip}")
+                        else:
+                            print(f"{domain}: {ip}" if not ips_only else f"{ip}")
+                else:
                     if not ips_only:
                         print(f"{domain}: No IP found")
     except FileNotFoundError:
