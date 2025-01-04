@@ -12,6 +12,7 @@ cd DomainIPResolver
 
 **Run the Script:**
 python3 find_ips.py -i domains.txt
+
 python3 find_ips.py -i domains.txt --ips-only
 
 **For Help**
